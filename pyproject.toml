@@ -1,0 +1,27 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "signals"
+version = "0.1.0"
+description = "Crypto coin scanner that ranks markets using the top 5 signals technical traders rely on"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "ccxt>=4.0.0",
+    "pandas>=2.0.0",
+    "numpy>=1.24.0",
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.29.0",
+    "rich>=13.0.0",
+]
+
+[project.scripts]
+signals-scan = "signals.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["signals*"]
+
+[tool.setuptools.package-data]
+"signals.web" = ["static/*"]
