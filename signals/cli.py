@@ -104,17 +104,22 @@ def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
 
-    if args.symbols:
-        symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
-        results = scan_symbols(args.exchange, symbols, timeframe=args.timeframe, limit=args.limit)
-    else:
-        results = scan_market(
-            exchange_id=args.exchange,
-            quote=args.quote,
-            top_n=args.top_n,
-            timeframe=args.timeframe,
-            limit=args.limit,
-        )
+    try:
+        if args.symbols:
+            symbols = [s.strip() for s in args.symbols.split(",") if s.strip()]
+            results = scan_symbols(args.exchange, symbols, timeframe=args.timeframe, limit=args.limit)
+        else:
+            results = scan_market(
+                exchange_id=args.exchange,
+                quote=args.quote,
+                top_n=args.top_n,
+                timeframe=args.timeframe,
+                limit=args.limit,
+            )
+    except Exception as exc:
+        print(f"Error: could not reach {args.exchange} ({exc}).", file=sys.stderr)
+        print("Check your network connection and the --exchange/--quote/--symbols values.", file=sys.stderr)
+        return 1
 
     if args.min_score is not None:
         results = [r for r in results if abs(r.composite_score) >= args.min_score]
