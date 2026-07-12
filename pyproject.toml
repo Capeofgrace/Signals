@@ -5,7 +5,7 @@ build-backend = "setuptools.build_meta"
 [project]
 name = "signals"
 version = "0.1.0"
-description = "Crypto coin scanner that ranks markets using the top 5 signals technical traders rely on"
+description = "Crypto coin scanner that ranks markets using the top signals technical traders rely on"
 readme = "README.md"
 requires-python = ">=3.10"
 dependencies = [

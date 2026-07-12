@@ -60,3 +60,22 @@ def test_volume_spike_ratio():
     # (19 * 10 + 50) / 20 = 12, so ratio = 50 / 12.
     expected_avg = (19 * 10 + 50) / 20
     assert ratio.iloc[-1] == pytest.approx(50 / expected_avg)
+
+
+def test_pivot_highs_finds_single_peak():
+    series = pd.Series([1.0, 2.0, 3.0, 5.0, 3.0, 2.0, 1.0])
+    mask = ind.pivot_highs(series, window=3)
+    assert list(mask[mask].index) == [3]
+
+
+def test_pivot_lows_finds_single_trough():
+    series = pd.Series([5.0, 4.0, 3.0, 1.0, 3.0, 4.0, 5.0])
+    mask = ind.pivot_lows(series, window=3)
+    assert list(mask[mask].index) == [3]
+
+
+def test_pivot_highs_ignores_flat_runs():
+    # A flat plateau has no directional peak; ties must not count as pivots.
+    series = pd.Series([1.0, 2.0, 3.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0])
+    mask = ind.pivot_highs(series, window=3)
+    assert not mask.any()

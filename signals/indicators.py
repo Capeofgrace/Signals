@@ -54,3 +54,21 @@ def volume_spike_ratio(volume: pd.Series, period: int = 20) -> pd.Series:
     """Current volume divided by its rolling average (>1 means above average)."""
     avg_volume = volume.rolling(window=period).mean()
     return volume / avg_volume
+
+
+def pivot_highs(series: pd.Series, window: int = 3) -> pd.Series:
+    """Boolean mask: True where a bar is strictly higher than every bar in the
+    `window` bars before it and the `window` bars after it. Requires strict
+    inequality on both sides so a flat run of equal values never counts as a
+    pivot (ties don't identify a swing high)."""
+    left_max = series.rolling(window).max().shift(1)
+    right_max = series[::-1].rolling(window).max()[::-1].shift(-1)
+    return (series > left_max) & (series > right_max)
+
+
+def pivot_lows(series: pd.Series, window: int = 3) -> pd.Series:
+    """Boolean mask: True where a bar is strictly lower than every bar in the
+    `window` bars before it and the `window` bars after it."""
+    left_min = series.rolling(window).min().shift(1)
+    right_min = series[::-1].rolling(window).min()[::-1].shift(-1)
+    return (series < left_min) & (series < right_min)

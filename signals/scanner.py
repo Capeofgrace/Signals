@@ -1,13 +1,14 @@
-"""Evaluates the five signal strategy against OHLCV data and ranks symbols.
+"""Evaluates the signal strategy against OHLCV data and ranks symbols.
 
-The five signals implemented here are the ones most commonly cited by
-experienced technical traders:
+The six signals implemented here are commonly cited by experienced
+technical traders:
 
-1. RSI(14)            - momentum / overbought-oversold
-2. MACD(12,26,9)       - trend momentum crossovers
-3. EMA 50/200 cross    - long-term trend direction (golden/death cross)
+1. RSI(14)               - momentum / overbought-oversold
+2. MACD(12,26,9)         - trend momentum crossovers
+3. EMA 50/200 cross      - long-term trend direction (golden/death cross)
 4. Bollinger Bands(20,2) - volatility breakout
-5. Volume spike        - conviction behind a move
+5. Volume spike          - conviction behind a move
+6. Double Top/Bottom     - reversal chart pattern with neckline confirmation
 """
 from __future__ import annotations
 
@@ -106,8 +107,132 @@ def _volume_spike_signal(close: pd.Series, open_: pd.Series, volume: pd.Series) 
     return SignalResult("Volume Spike", "neutral", 0, f"{ratio:.2f}x average volume")
 
 
+def _find_double_top(
+    df: pd.DataFrame,
+    window: int = 3,
+    lookback: int = 120,
+    tolerance: float = 0.025,
+    min_depth: float = 0.02,
+    min_gap: int = 5,
+    max_gap: int = 60,
+) -> dict | None:
+    """Locate the most recent double-top candidate: two similar-height pivot
+    highs with a meaningfully deeper trough between them. Returns None if no
+    such pair exists in the lookback window."""
+    sub = df.iloc[-lookback:] if len(df) > lookback else df
+    high = sub["high"].reset_index(drop=True)
+    low = sub["low"].reset_index(drop=True)
+    close = sub["close"].reset_index(drop=True)
+
+    mask = ind.pivot_highs(high, window)
+    positions = mask[mask].index.tolist()
+    if len(positions) < 2:
+        return None
+    i1, i2 = positions[-2], positions[-1]
+    gap = i2 - i1
+    if gap < min_gap or gap > max_gap:
+        return None
+
+    peak1, peak2 = high.iloc[i1], high.iloc[i2]
+    avg_peak = (peak1 + peak2) / 2
+    if avg_peak <= 0 or abs(peak1 - peak2) / avg_peak > tolerance:
+        return None
+
+    neckline = low.iloc[i1 : i2 + 1].min()
+    if (avg_peak - neckline) / avg_peak < min_depth:
+        return None
+
+    after = close.iloc[i2 + 1 :]
+    broken = after[after < neckline]
+    confirmed = len(broken) > 0
+    fresh = confirmed and after.iloc[-1] < neckline and (len(after) < 2 or after.iloc[-2] >= neckline)
+    return {
+        "kind": "double_top",
+        "pivot2_pos": i2,
+        "confirmed": confirmed,
+        "fresh": fresh,
+        "level": peak2,
+        "neckline": neckline,
+    }
+
+
+def _find_double_bottom(
+    df: pd.DataFrame,
+    window: int = 3,
+    lookback: int = 120,
+    tolerance: float = 0.025,
+    min_depth: float = 0.02,
+    min_gap: int = 5,
+    max_gap: int = 60,
+) -> dict | None:
+    """Mirror image of _find_double_top: two similar-depth pivot lows with a
+    meaningfully higher peak between them."""
+    sub = df.iloc[-lookback:] if len(df) > lookback else df
+    high = sub["high"].reset_index(drop=True)
+    low = sub["low"].reset_index(drop=True)
+    close = sub["close"].reset_index(drop=True)
+
+    mask = ind.pivot_lows(low, window)
+    positions = mask[mask].index.tolist()
+    if len(positions) < 2:
+        return None
+    i1, i2 = positions[-2], positions[-1]
+    gap = i2 - i1
+    if gap < min_gap or gap > max_gap:
+        return None
+
+    trough1, trough2 = low.iloc[i1], low.iloc[i2]
+    avg_trough = (trough1 + trough2) / 2
+    if avg_trough <= 0 or abs(trough1 - trough2) / avg_trough > tolerance:
+        return None
+
+    neckline = high.iloc[i1 : i2 + 1].max()
+    if (neckline - avg_trough) / avg_trough < min_depth:
+        return None
+
+    after = close.iloc[i2 + 1 :]
+    broken = after[after > neckline]
+    confirmed = len(broken) > 0
+    fresh = confirmed and after.iloc[-1] > neckline and (len(after) < 2 or after.iloc[-2] <= neckline)
+    return {
+        "kind": "double_bottom",
+        "pivot2_pos": i2,
+        "confirmed": confirmed,
+        "fresh": fresh,
+        "level": trough2,
+        "neckline": neckline,
+    }
+
+
+def _double_pattern_signal(df: pd.DataFrame) -> SignalResult:
+    name = "Double Top/Bottom"
+    candidates = [c for c in (_find_double_top(df), _find_double_bottom(df)) if c is not None]
+    if not candidates:
+        return SignalResult(name, "neutral", 0, "No pattern detected")
+
+    chosen = max(candidates, key=lambda c: c["pivot2_pos"])
+    timing = "just broke" if chosen["fresh"] else "broke"
+
+    if chosen["kind"] == "double_top":
+        if chosen["confirmed"]:
+            return SignalResult(
+                name, "bearish", -1, f"Double top confirmed, neckline {timing} at {chosen['neckline']:.4g}"
+            )
+        return SignalResult(
+            name, "neutral", 0, f"Double top forming near {chosen['level']:.4g} (neckline {chosen['neckline']:.4g})"
+        )
+
+    if chosen["confirmed"]:
+        return SignalResult(
+            name, "bullish", 1, f"Double bottom confirmed, neckline {timing} at {chosen['neckline']:.4g}"
+        )
+    return SignalResult(
+        name, "neutral", 0, f"Double bottom forming near {chosen['level']:.4g} (neckline {chosen['neckline']:.4g})"
+    )
+
+
 def evaluate_signals(df: pd.DataFrame) -> list[SignalResult]:
-    """Run all five signals against an OHLCV DataFrame with
+    """Run all six signals against an OHLCV DataFrame with
     open/high/low/close/volume columns."""
     close, open_, volume = df["close"], df["open"], df["volume"]
     return [
@@ -116,6 +241,7 @@ def evaluate_signals(df: pd.DataFrame) -> list[SignalResult]:
         _ema_cross_signal(close),
         _bollinger_signal(close),
         _volume_spike_signal(close, open_, volume),
+        _double_pattern_signal(df),
     ]
 
 

@@ -20,10 +20,58 @@ def _base_df(n=250, start=100.0, step=0.0, noise=0.0, seed=1):
     return df
 
 
-def test_evaluate_signals_returns_five_results():
+def _double_top_df(break_below=True, fresh=False):
+    up1 = np.linspace(90, 110, 10)
+    down1 = np.linspace(110, 95, 8)[1:]
+    up2 = np.linspace(95, 110, 8)[1:]
+    if fresh:
+        down2 = np.linspace(110, 96, 10)[1:]
+        tail = np.array([90.0])
+    elif break_below:
+        down2 = np.linspace(110, 80, 14)[1:]
+        tail = np.full(15, down2[-1])
+    else:
+        down2 = np.linspace(110, 100, 6)[1:]
+        tail = np.full(15, down2[-1])
+    prices = np.concatenate([up1, down1, up2, down2, tail])
+    n = len(prices)
+    return pd.DataFrame(
+        {
+            "open": prices,
+            "high": prices + 0.3,
+            "low": prices - 0.3,
+            "close": prices,
+            "volume": np.full(n, 1000.0),
+        }
+    )
+
+
+def _double_bottom_df(break_above=True):
+    down1 = np.linspace(110, 90, 10)
+    up1 = np.linspace(90, 105, 8)[1:]
+    down2 = np.linspace(105, 90, 8)[1:]
+    if break_above:
+        up2 = np.linspace(90, 120, 14)[1:]
+    else:
+        up2 = np.linspace(90, 100, 6)[1:]
+    tail = np.full(15, up2[-1])
+    prices = np.concatenate([down1, up1, down2, up2, tail])
+    n = len(prices)
+    return pd.DataFrame(
+        {
+            "open": prices,
+            "high": prices + 0.3,
+            "low": prices - 0.3,
+            "close": prices,
+            "volume": np.full(n, 1000.0),
+        }
+    )
+
+
+def test_evaluate_signals_returns_six_results():
     df = _base_df()
     signals = evaluate_signals(df)
-    assert len(signals) == 5
+    assert len(signals) == 6
     names = {s.name for s in signals}
     assert names == {
         "RSI(14)",
@@ -31,7 +79,61 @@ def test_evaluate_signals_returns_five_results():
         "EMA 50/200 Cross",
         "Bollinger Bands(20,2)",
         "Volume Spike",
+        "Double Top/Bottom",
     }
+
+
+def test_double_top_confirmed_is_bearish():
+    df = _double_top_df(break_below=True)
+    signals = {s.name: s for s in evaluate_signals(df)}
+    pattern = signals["Double Top/Bottom"]
+    assert pattern.verdict == "bearish"
+    assert pattern.score == -1
+    assert "confirmed" in pattern.detail.lower()
+
+
+def test_double_top_forming_is_neutral_but_flagged():
+    df = _double_top_df(break_below=False)
+    signals = {s.name: s for s in evaluate_signals(df)}
+    pattern = signals["Double Top/Bottom"]
+    assert pattern.verdict == "neutral"
+    assert pattern.score == 0
+    assert "forming" in pattern.detail.lower()
+
+
+def test_double_top_fresh_break_is_flagged_as_fresh():
+    df = _double_top_df(fresh=True)
+    signals = {s.name: s for s in evaluate_signals(df)}
+    pattern = signals["Double Top/Bottom"]
+    assert pattern.verdict == "bearish"
+    assert "just broke" in pattern.detail.lower()
+
+
+def test_double_bottom_confirmed_is_bullish():
+    df = _double_bottom_df(break_above=True)
+    signals = {s.name: s for s in evaluate_signals(df)}
+    pattern = signals["Double Top/Bottom"]
+    assert pattern.verdict == "bullish"
+    assert pattern.score == 1
+    assert "confirmed" in pattern.detail.lower()
+
+
+def test_double_bottom_forming_is_neutral_but_flagged():
+    df = _double_bottom_df(break_above=False)
+    signals = {s.name: s for s in evaluate_signals(df)}
+    pattern = signals["Double Top/Bottom"]
+    assert pattern.verdict == "neutral"
+    assert pattern.score == 0
+    assert "forming" in pattern.detail.lower()
+
+
+def test_no_double_pattern_on_a_clean_trend():
+    df = _base_df(n=60, start=100.0, step=0.8, noise=0.0)
+    signals = {s.name: s for s in evaluate_signals(df)}
+    pattern = signals["Double Top/Bottom"]
+    assert pattern.verdict == "neutral"
+    assert pattern.score == 0
+    assert pattern.detail == "No pattern detected"
 
 
 def test_rsi_oversold_signal_is_bullish():

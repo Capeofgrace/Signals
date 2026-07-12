@@ -1,11 +1,11 @@
 # Signals — Crypto Coin Signal Scanner
 
-Scans crypto markets and ranks coins using the five technical signals most
+Scans crypto markets and ranks coins using the six technical signals most
 widely relied on by experienced traders. Works against any exchange
 supported by [ccxt](https://github.com/ccxt/ccxt) (Binance, Coinbase, Kraken,
 Bybit, etc.) using only public market data — no API keys required.
 
-## The 5 signals
+## The 6 signals
 
 | # | Signal | What it measures | Bullish trigger | Bearish trigger |
 |---|--------|-------------------|------------------|------------------|
@@ -14,11 +14,19 @@ Bybit, etc.) using only public market data — no API keys required.
 | 3 | **EMA 50/200 Cross** | Long-term trend direction | Golden cross / EMA50 above EMA200 | Death cross / EMA50 below EMA200 |
 | 4 | **Bollinger Bands(20,2)** | Volatility breakout | Close breaks above upper band | Close breaks below lower band |
 | 5 | **Volume Spike** | Conviction behind a move | ≥2x average volume on an up candle | ≥2x average volume on a down candle |
+| 6 | **Double Top/Bottom** | Reversal chart pattern | Double bottom confirmed (close breaks above the neckline) | Double top confirmed (close breaks below the neckline) |
 
 Each signal contributes `+1` (bullish), `-1` (bearish), or `0` (neutral) to a
-**composite score** in the range `-5..+5`, which maps to a verdict:
+**composite score** in the range `-6..+6`, which maps to a verdict:
 
 `Strong Buy` (≥3) · `Buy` (1-2) · `Neutral` (0) · `Sell` (-1..-2) · `Strong Sell` (≤-3)
+
+**On the double top/bottom pattern:** two pivot highs (or lows) of similar
+height within a lookback window, with a meaningfully deeper trough (or higher
+peak) between them, form the pattern; it only scores once price closes past
+the neckline (the trough for a top, the peak for a bottom) — an unconfirmed
+pattern shows up as a neutral "forming" note so you know to watch it, but
+doesn't move the composite score.
 
 These are widely-used, well-documented signals — not a guarantee of
 profitability. Always combine with your own risk management; this tool

@@ -21,8 +21,9 @@ VERDICT_STYLE = {
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="signals-scan",
-        description="Scan crypto markets for the top 5 trader signals: "
-        "RSI, MACD, EMA 50/200 cross, Bollinger breakout, and volume spike.",
+        description="Scan crypto markets for the top trader signals: "
+        "RSI, MACD, EMA 50/200 cross, Bollinger breakout, volume spike, "
+        "and double top/bottom reversal patterns.",
     )
     parser.add_argument("--exchange", default="binance", help="ccxt exchange id (default: binance)")
     parser.add_argument("--quote", default="USDT", help="Quote currency to scan (default: USDT)")
