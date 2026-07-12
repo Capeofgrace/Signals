@@ -2,7 +2,6 @@ import numpy as np
 import pandas as pd
 
 from signals import data as data_mod
-from signals import indicators as ind
 from signals.scanner import SignalResult, composite_verdict, evaluate_signals, scan_dataframe, scan_symbols
 
 
@@ -207,40 +206,8 @@ def test_bollinger_breakout_bullish():
     assert signals["Bollinger Bands(20,2)"].verdict == "bullish"
 
 
-def test_buy_requires_rsi_below_30():
-    signals = _signals()
-    assert composite_verdict(1, signals, rsi_value=25.0) == "Buy"
-    assert composite_verdict(4, signals, rsi_value=25.0) == "Strong Buy"
-
-
-def test_buy_not_triggered_when_rsi_at_or_above_30():
-    signals = _signals()
-    # Even a strongly positive composite score doesn't matter once RSI
-    # is out of the oversold zone.
-    assert composite_verdict(5, signals, rsi_value=30.0) == "Neutral"
-    assert composite_verdict(5, signals, rsi_value=45.0) == "Neutral"
-
-
-def test_sell_requires_rsi_above_60():
-    signals = _signals()
-    assert composite_verdict(0, signals, rsi_value=65.0) == "Sell"
-
-
-def test_sell_upgrades_to_strong_sell_with_confirmed_double_top():
-    signals = _signals(**{"Double Top/Bottom": ("bearish", -1)})
-    assert composite_verdict(0, signals, rsi_value=65.0) == "Strong Sell"
-
-
-def test_sell_not_triggered_when_rsi_at_or_below_60():
-    # Double top confirmed bearish is no longer sufficient on its own --
-    # RSI > 60 is a hard requirement for Sell.
-    signals = _signals(**{"Double Top/Bottom": ("bearish", -1)})
-    assert composite_verdict(-1, signals, rsi_value=60.0) == "Neutral"
-    assert composite_verdict(-1, signals, rsi_value=45.0) == "Neutral"
-
-
-def test_composite_verdict_falls_back_to_score_thresholds_without_rsi():
-    # rsi_value omitted (e.g. not enough history) -> legacy score-only path.
+def test_composite_verdict_thresholds():
+    # No `signals` passed -> legacy score-only thresholds (backward compatible).
     assert composite_verdict(5) == "Strong Buy"
     assert composite_verdict(1) == "Buy"
     assert composite_verdict(0) == "Neutral"
@@ -248,29 +215,83 @@ def test_composite_verdict_falls_back_to_score_thresholds_without_rsi():
     assert composite_verdict(-5) == "Strong Sell"
 
 
+def test_sell_verdict_requires_rsi_and_double_top_both_bearish():
+    signals = _signals(**{"RSI(14)": ("bearish", -1), "Double Top/Bottom": ("bearish", -1)})
+    # Score is strongly positive from the other four, but Sell is gated
+    # solely by RSI + Double Top per the sell-side rule.
+    assert composite_verdict(4, signals) == "Strong Sell"
+
+
+def test_sell_verdict_with_only_rsi_bearish_is_plain_sell():
+    signals = _signals(**{"RSI(14)": ("bearish", -1)})
+    assert composite_verdict(0, signals) == "Sell"
+
+
+def test_sell_verdict_with_only_double_top_bearish_is_plain_sell():
+    signals = _signals(**{"Double Top/Bottom": ("bearish", -1)})
+    assert composite_verdict(0, signals) == "Sell"
+
+
+def test_other_bearish_signals_alone_do_not_trigger_sell():
+    # MACD, EMA, Bollinger, and Volume are all bearish, but RSI and Double
+    # Top/Bottom are not -> should NOT classify as Sell.
+    signals = _signals(
+        **{
+            "MACD(12,26,9)": ("bearish", -1),
+            "EMA 50/200 Cross": ("bearish", -1),
+            "Bollinger Bands(20,2)": ("bearish", -1),
+            "Volume Spike": ("bearish", -1),
+        }
+    )
+    assert composite_verdict(-4, signals) == "Neutral"
+
+
+def test_buy_verdict_uses_full_composite_score_no_rsi_gate():
+    # No RSI-value restriction on Buy anymore -- a positive score from any
+    # mix of signals qualifies, even with RSI neutral.
+    signals = _signals(**{"MACD(12,26,9)": ("bullish", 1), "EMA 50/200 Cross": ("bullish", 1)})
+    assert composite_verdict(2, signals) == "Buy"
+    signals = _signals(
+        **{
+            "MACD(12,26,9)": ("bullish", 1),
+            "EMA 50/200 Cross": ("bullish", 1),
+            "Bollinger Bands(20,2)": ("bullish", 1),
+        }
+    )
+    assert composite_verdict(3, signals) == "Strong Buy"
+
+
 def test_scan_dataframe_aggregates_score():
     df = _base_df(n=260, start=100.0, step=0.3, noise=0.0)
     result = scan_dataframe("BTC/USDT", df)
-    rsi_value = ind.rsi(df["close"], 14).iloc[-1]
     assert result.symbol == "BTC/USDT"
     assert result.price == df["close"].iloc[-1]
     assert result.composite_score == sum(s.score for s in result.signals)
-    assert result.verdict == composite_verdict(result.composite_score, result.signals, float(rsi_value))
+    assert result.verdict == composite_verdict(result.composite_score, result.signals)
+
+
+def _noisy_df(drift, vol, seed, n=50, warmup=220, start=100.0):
+    rng = np.random.default_rng(seed)
+    prices = np.concatenate([np.full(warmup, start), start + np.cumsum(rng.normal(drift, vol, n))])
+    return pd.DataFrame(
+        {
+            "open": prices,
+            "high": prices + 0.3,
+            "low": prices - 0.3,
+            "close": prices,
+            "volume": np.full(len(prices), 1000.0),
+        }
+    )
 
 
 def test_scan_symbols_drops_neutral_results(monkeypatch):
-    # RSI oversold (<30) -> Buy, should be kept.
-    buy_df = _base_df(n=60, start=200.0, step=-1.5, noise=0.0)
-    # Mild chop with no strong drift -> RSI mid-range -> Neutral, should be dropped.
-    neutral_df = _base_df(n=60, start=100.0, step=0.02, noise=0.8, seed=3)
+    buy_df = _noisy_df(drift=0.15, vol=0.7, seed=21)
+    neutral_df = _noisy_df(drift=0.0, vol=0.5, seed=3)
+
+    assert scan_dataframe("BUY/USDT", buy_df).verdict == "Buy"
+    assert scan_dataframe("NEUTRAL/USDT", neutral_df).verdict == "Neutral"
 
     fake_dfs = {"BUY/USDT": buy_df, "NEUTRAL/USDT": neutral_df}
-    assert composite_verdict(
-        sum(s.score for s in evaluate_signals(neutral_df)),
-        evaluate_signals(neutral_df),
-        float(ind.rsi(neutral_df["close"], 14).iloc[-1]),
-    ) == "Neutral"
-
     monkeypatch.setattr(data_mod, "get_exchange", lambda exchange_id: object())
     monkeypatch.setattr(data_mod, "fetch_ohlcv", lambda exchange, symbol, timeframe, limit: fake_dfs[symbol])
 
