@@ -35,6 +35,13 @@ they still display in the signal breakdown and still count toward the
 composite score shown/sorted in the table, they just don't decide Buy vs.
 Sell vs. Neutral by themselves.
 
+**Neutral results are filtered out of scan output entirely.** The scanner
+only returns actionable Buy/Strong Buy/Sell/Strong Sell calls — a symbol
+that lands in the RSI 30-60 zone (the common case for most coins most of
+the time) simply doesn't appear in the CLI table, JSON/CSV output, or the
+web dashboard. This applies to both auto-discovered top-N scans and
+explicit `--symbols` lists.
+
 **On the double top/bottom pattern:** two pivot highs (or lows) of similar
 height within a lookback window, with a meaningfully deeper trough (or higher
 peak) between them, form the pattern; it only scores once price closes past

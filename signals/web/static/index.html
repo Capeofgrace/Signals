@@ -160,7 +160,7 @@
 
   .stat-tiles {
     display: grid;
-    grid-template-columns: repeat(5, 1fr);
+    grid-template-columns: repeat(4, 1fr);
     gap: 12px;
     margin: 12px 0 24px;
   }
@@ -188,12 +188,10 @@
   }
   .tile.strong-buy .count { color: var(--good); }
   .tile.buy .count { color: var(--good); }
-  .tile.neutral .count { color: var(--text-muted); }
   .tile.sell .count { color: var(--serious); }
   .tile.strong-sell .count { color: var(--critical); }
   .tile.strong-buy .swatch { background: var(--good); }
   .tile.buy .swatch { background: var(--good); opacity: 0.55; }
-  .tile.neutral .swatch { background: var(--text-muted); }
   .tile.sell .swatch { background: var(--serious); }
   .tile.strong-sell .swatch { background: var(--critical); }
 
@@ -363,13 +361,14 @@
       </thead>
       <tbody id="rows"></tbody>
     </table>
-    <div class="empty-state" id="emptyState" style="display:none">No results yet — hit Scan now.</div>
+    <div class="empty-state" id="emptyState" style="display:none">No Buy/Sell signals right now — hit Scan now, or try a different timeframe/exchange.</div>
   </div>
 
   <footer>
     Signals are computational technical indicators (RSI, MACD, EMA 50/200 cross, Bollinger Band breakout,
     volume spike, double top/bottom patterns) — not financial advice. Composite score ranges −6..+6 across
-    the six signals. Data is fetched live from the selected exchange's public market data via ccxt.
+    the six signals. Neutral calls are filtered out — only actionable Buy/Strong Buy/Sell/Strong Sell results
+    are shown. Data is fetched live from the selected exchange's public market data via ccxt.
   </footer>
 </main>
 
@@ -381,7 +380,7 @@ const VERDICT_META = {
   "Sell":        { cls: "sell",        tile: "sell",        order: 2 },
   "Strong Sell": { cls: "strong-sell", tile: "strong-sell", order: 1 },
 };
-const TILE_ORDER = ["Strong Buy", "Buy", "Neutral", "Sell", "Strong Sell"];
+const TILE_ORDER = ["Strong Buy", "Buy", "Sell", "Strong Sell"];
 const LOOKBACK_DAYS = { "15m": 300 * 15 / 60 / 24, "1h": 300 / 24, "4h": 300 * 4 / 24, "1d": 300 };
 
 let currentData = [];

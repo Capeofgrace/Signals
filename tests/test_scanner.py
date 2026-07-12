@@ -1,8 +1,9 @@
 import numpy as np
 import pandas as pd
 
+from signals import data as data_mod
 from signals import indicators as ind
-from signals.scanner import SignalResult, composite_verdict, evaluate_signals, scan_dataframe
+from signals.scanner import SignalResult, composite_verdict, evaluate_signals, scan_dataframe, scan_symbols
 
 
 def _signals(**overrides):
@@ -255,3 +256,26 @@ def test_scan_dataframe_aggregates_score():
     assert result.price == df["close"].iloc[-1]
     assert result.composite_score == sum(s.score for s in result.signals)
     assert result.verdict == composite_verdict(result.composite_score, result.signals, float(rsi_value))
+
+
+def test_scan_symbols_drops_neutral_results(monkeypatch):
+    # RSI oversold (<30) -> Buy, should be kept.
+    buy_df = _base_df(n=60, start=200.0, step=-1.5, noise=0.0)
+    # Mild chop with no strong drift -> RSI mid-range -> Neutral, should be dropped.
+    neutral_df = _base_df(n=60, start=100.0, step=0.02, noise=0.8, seed=3)
+
+    fake_dfs = {"BUY/USDT": buy_df, "NEUTRAL/USDT": neutral_df}
+    assert composite_verdict(
+        sum(s.score for s in evaluate_signals(neutral_df)),
+        evaluate_signals(neutral_df),
+        float(ind.rsi(neutral_df["close"], 14).iloc[-1]),
+    ) == "Neutral"
+
+    monkeypatch.setattr(data_mod, "get_exchange", lambda exchange_id: object())
+    monkeypatch.setattr(data_mod, "fetch_ohlcv", lambda exchange, symbol, timeframe, limit: fake_dfs[symbol])
+
+    results = scan_symbols("binance", ["BUY/USDT", "NEUTRAL/USDT"])
+    symbols_returned = {r.symbol for r in results}
+    assert "BUY/USDT" in symbols_returned
+    assert "NEUTRAL/USDT" not in symbols_returned
+    assert all(r.verdict != "Neutral" for r in results)

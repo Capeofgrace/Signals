@@ -311,7 +311,9 @@ def scan_symbols(
     limit: int = 300,
 ) -> list[ScanResult]:
     """Fetch data for each symbol and evaluate signals, skipping any symbol
-    that fails to fetch or lacks enough history."""
+    that fails to fetch or lacks enough history. Neutral verdicts are
+    dropped -- only actionable Buy/Strong Buy/Sell/Strong Sell calls are
+    returned."""
     exchange = data_mod.get_exchange(exchange_id)
     results = []
     for symbol in symbols:
@@ -321,7 +323,10 @@ def scan_symbols(
             continue
         if len(df) < MIN_CANDLES:
             continue
-        results.append(scan_dataframe(symbol, df))
+        result = scan_dataframe(symbol, df)
+        if result.verdict == "Neutral":
+            continue
+        results.append(result)
     results.sort(key=lambda r: r.composite_score, reverse=True)
     return results
 
