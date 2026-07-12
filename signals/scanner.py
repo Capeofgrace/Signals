@@ -245,28 +245,38 @@ def evaluate_signals(df: pd.DataFrame) -> list[SignalResult]:
     ]
 
 
-SELL_SIGNAL_NAMES = ("RSI(14)", "Double Top/Bottom")
+RSI_BUY_MAX = 30
+RSI_SELL_MIN = 60
 
 
-def composite_verdict(score: int, signals: list[SignalResult] | None = None) -> str:
-    """Buy/Strong Buy is driven by the full composite score across all six
-    signals. Sell/Strong Sell is intentionally narrower: it's driven only by
-    RSI and the Double Top/Bottom pattern, regardless of what the other four
-    signals say — pass `signals` to enable that gate. Without `signals`, this
-    falls back to score-only thresholds for both directions."""
-    if signals is not None:
-        by_name = {s.name: s for s in signals}
-        bearish_votes = sum(
-            1 for name in SELL_SIGNAL_NAMES if by_name.get(name) is not None and by_name[name].verdict == "bearish"
-        )
-        if bearish_votes >= 2:
-            return "Strong Sell"
-        if bearish_votes == 1:
-            return "Sell"
-        if score >= 3:
-            return "Strong Buy"
-        if score >= 1:
-            return "Buy"
+def composite_verdict(
+    score: int,
+    signals: list[SignalResult] | None = None,
+    rsi_value: float | None = None,
+) -> str:
+    """Buy and Sell are both hard-gated on the raw RSI(14) value, not just
+    the RSI signal's own verdict:
+
+    - RSI > 60 is required for Sell/Strong Sell. Double Top/Bottom confirmed
+      bearish on top of that upgrades it to Strong Sell; otherwise it's Sell.
+    - RSI < 30 is required for Buy/Strong Buy. Among those, the full
+      composite score (all six signals) decides Strong Buy (score >= 3)
+      vs. Buy.
+    - RSI between 30 and 60 is Neutral, regardless of the other signals.
+
+    Pass `rsi_value` to enable this gate. Without it (e.g. not enough
+    history to compute RSI), this falls back to score-only thresholds.
+    """
+    if rsi_value is not None:
+        pattern = None
+        if signals is not None:
+            pattern = next((s for s in signals if s.name == "Double Top/Bottom"), None)
+        pattern_bearish = pattern is not None and pattern.verdict == "bearish"
+
+        if rsi_value > RSI_SELL_MIN:
+            return "Strong Sell" if pattern_bearish else "Sell"
+        if rsi_value < RSI_BUY_MAX:
+            return "Strong Buy" if score >= 3 else "Buy"
         return "Neutral"
 
     if score >= 3:
@@ -283,11 +293,13 @@ def composite_verdict(score: int, signals: list[SignalResult] | None = None) -> 
 def scan_dataframe(symbol: str, df: pd.DataFrame) -> ScanResult:
     signals = evaluate_signals(df)
     score = sum(s.score for s in signals)
+    rsi_series = ind.rsi(df["close"], 14)
+    rsi_value = None if pd.isna(rsi_series.iloc[-1]) else float(rsi_series.iloc[-1])
     return ScanResult(
         symbol=symbol,
         price=float(df["close"].iloc[-1]),
         composite_score=score,
-        verdict=composite_verdict(score, signals),
+        verdict=composite_verdict(score, signals, rsi_value),
         signals=signals,
     )
 

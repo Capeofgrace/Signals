@@ -17,21 +17,23 @@ Bybit, etc.) using only public market data — no API keys required.
 | 6 | **Double Top/Bottom** | Reversal chart pattern | Double bottom confirmed (close breaks above the neckline) | Double top confirmed (close breaks below the neckline) |
 
 Each signal contributes `+1` (bullish), `-1` (bearish), or `0` (neutral) to a
-**composite score** in the range `-6..+6`.
+**composite score** in the range `-6..+6`, but the final verdict is **hard-gated
+on the raw RSI(14) value**, not just the composite score:
 
-**Buy / Strong Buy** is driven by the full composite score across all six
-signals (`Strong Buy` at score ≥3, `Buy` at 1-2).
+- **RSI < 30 required for Buy/Strong Buy.** Among those, the full composite
+  score across all six signals decides `Strong Buy` (score ≥3) vs. `Buy`.
+- **RSI > 60 required for Sell/Strong Sell.** Double Top/Bottom also
+  confirmed bearish upgrades it to `Strong Sell`; RSI > 60 alone is `Sell`.
+- **RSI between 30 and 60 → `Neutral`**, regardless of what the other five
+  signals say. A coin can have a strongly positive or negative composite
+  score and still show `Neutral` if RSI is sitting in the middle of its
+  range — that's intentional: RSI is the primary gate, the other signals
+  only refine the call once RSI has already qualified it.
 
-**Sell / Strong Sell is intentionally narrower.** It's driven only by RSI and
-the Double Top/Bottom pattern, regardless of what the other four signals say:
-both bearish → `Strong Sell`, either one alone → `Sell`, neither → falls
-through to the Buy/Neutral check above. MACD, EMA cross, Bollinger, and
-Volume never trigger a sell call on their own — they still display and still
-count toward the composite score/ranking, they just don't gate the sell
-verdict. One consequence: a coin can show a positive composite score (green
-score bar) alongside a `Sell` badge if RSI + Double Top both flip bearish
-while the other four stay bullish — that's the sell rule intentionally
-overriding the broader score for that specific call.
+MACD, EMA cross, Bollinger, and Volume never gate the verdict on their own —
+they still display in the signal breakdown and still count toward the
+composite score shown/sorted in the table, they just don't decide Buy vs.
+Sell vs. Neutral by themselves.
 
 **On the double top/bottom pattern:** two pivot highs (or lows) of similar
 height within a lookback window, with a meaningfully deeper trough (or higher
