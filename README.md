@@ -17,9 +17,21 @@ Bybit, etc.) using only public market data — no API keys required.
 | 6 | **Double Top/Bottom** | Reversal chart pattern | Double bottom confirmed (close breaks above the neckline) | Double top confirmed (close breaks below the neckline) |
 
 Each signal contributes `+1` (bullish), `-1` (bearish), or `0` (neutral) to a
-**composite score** in the range `-6..+6`, which maps to a verdict:
+**composite score** in the range `-6..+6`.
 
-`Strong Buy` (≥3) · `Buy` (1-2) · `Neutral` (0) · `Sell` (-1..-2) · `Strong Sell` (≤-3)
+**Buy / Strong Buy** is driven by the full composite score across all six
+signals (`Strong Buy` at score ≥3, `Buy` at 1-2).
+
+**Sell / Strong Sell is intentionally narrower.** It's driven only by RSI and
+the Double Top/Bottom pattern, regardless of what the other four signals say:
+both bearish → `Strong Sell`, either one alone → `Sell`, neither → falls
+through to the Buy/Neutral check above. MACD, EMA cross, Bollinger, and
+Volume never trigger a sell call on their own — they still display and still
+count toward the composite score/ranking, they just don't gate the sell
+verdict. One consequence: a coin can show a positive composite score (green
+score bar) alongside a `Sell` badge if RSI + Double Top both flip bearish
+while the other four stay bullish — that's the sell rule intentionally
+overriding the broader score for that specific call.
 
 **On the double top/bottom pattern:** two pivot highs (or lows) of similar
 height within a lookback window, with a meaningfully deeper trough (or higher

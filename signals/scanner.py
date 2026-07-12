@@ -245,7 +245,30 @@ def evaluate_signals(df: pd.DataFrame) -> list[SignalResult]:
     ]
 
 
-def composite_verdict(score: int) -> str:
+SELL_SIGNAL_NAMES = ("RSI(14)", "Double Top/Bottom")
+
+
+def composite_verdict(score: int, signals: list[SignalResult] | None = None) -> str:
+    """Buy/Strong Buy is driven by the full composite score across all six
+    signals. Sell/Strong Sell is intentionally narrower: it's driven only by
+    RSI and the Double Top/Bottom pattern, regardless of what the other four
+    signals say — pass `signals` to enable that gate. Without `signals`, this
+    falls back to score-only thresholds for both directions."""
+    if signals is not None:
+        by_name = {s.name: s for s in signals}
+        bearish_votes = sum(
+            1 for name in SELL_SIGNAL_NAMES if by_name.get(name) is not None and by_name[name].verdict == "bearish"
+        )
+        if bearish_votes >= 2:
+            return "Strong Sell"
+        if bearish_votes == 1:
+            return "Sell"
+        if score >= 3:
+            return "Strong Buy"
+        if score >= 1:
+            return "Buy"
+        return "Neutral"
+
     if score >= 3:
         return "Strong Buy"
     if score >= 1:
@@ -264,7 +287,7 @@ def scan_dataframe(symbol: str, df: pd.DataFrame) -> ScanResult:
         symbol=symbol,
         price=float(df["close"].iloc[-1]),
         composite_score=score,
-        verdict=composite_verdict(score),
+        verdict=composite_verdict(score, signals),
         signals=signals,
     )
 

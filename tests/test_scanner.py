@@ -1,7 +1,22 @@
 import numpy as np
 import pandas as pd
 
-from signals.scanner import composite_verdict, evaluate_signals, scan_dataframe
+from signals.scanner import SignalResult, composite_verdict, evaluate_signals, scan_dataframe
+
+
+def _signals(**overrides):
+    """Build a full 6-signal list with everything neutral by default,
+    overridden by name -> (verdict, score) for the ones under test."""
+    base = {
+        "RSI(14)": ("neutral", 0),
+        "MACD(12,26,9)": ("neutral", 0),
+        "EMA 50/200 Cross": ("neutral", 0),
+        "Bollinger Bands(20,2)": ("neutral", 0),
+        "Volume Spike": ("neutral", 0),
+        "Double Top/Bottom": ("neutral", 0),
+    }
+    base.update(overrides)
+    return [SignalResult(name, verdict, score, "detail") for name, (verdict, score) in base.items()]
 
 
 def _base_df(n=250, start=100.0, step=0.0, noise=0.0, seed=1):
@@ -191,11 +206,48 @@ def test_bollinger_breakout_bullish():
 
 
 def test_composite_verdict_thresholds():
+    # No `signals` passed -> legacy score-only thresholds (backward compatible).
     assert composite_verdict(5) == "Strong Buy"
     assert composite_verdict(1) == "Buy"
     assert composite_verdict(0) == "Neutral"
     assert composite_verdict(-2) == "Sell"
     assert composite_verdict(-5) == "Strong Sell"
+
+
+def test_sell_verdict_requires_rsi_and_double_top_both_bearish():
+    signals = _signals(**{"RSI(14)": ("bearish", -1), "Double Top/Bottom": ("bearish", -1)})
+    # Score is strongly positive from the other four, but Sell is gated
+    # solely by RSI + Double Top per the sell-side rule.
+    assert composite_verdict(4, signals) == "Strong Sell"
+
+
+def test_sell_verdict_with_only_rsi_bearish_is_plain_sell():
+    signals = _signals(**{"RSI(14)": ("bearish", -1)})
+    assert composite_verdict(0, signals) == "Sell"
+
+
+def test_sell_verdict_with_only_double_top_bearish_is_plain_sell():
+    signals = _signals(**{"Double Top/Bottom": ("bearish", -1)})
+    assert composite_verdict(0, signals) == "Sell"
+
+
+def test_other_bearish_signals_alone_do_not_trigger_sell():
+    # MACD, EMA, Bollinger, and Volume are all bearish, but RSI and Double
+    # Top/Bottom are not -> should NOT classify as Sell.
+    signals = _signals(
+        **{
+            "MACD(12,26,9)": ("bearish", -1),
+            "EMA 50/200 Cross": ("bearish", -1),
+            "Bollinger Bands(20,2)": ("bearish", -1),
+            "Volume Spike": ("bearish", -1),
+        }
+    )
+    assert composite_verdict(-4, signals) == "Neutral"
+
+
+def test_buy_verdict_still_uses_full_composite_score():
+    signals = _signals(**{"RSI(14)": ("bullish", 1), "MACD(12,26,9)": ("bullish", 1), "EMA 50/200 Cross": ("bullish", 1)})
+    assert composite_verdict(3, signals) == "Strong Buy"
 
 
 def test_scan_dataframe_aggregates_score():
@@ -204,4 +256,4 @@ def test_scan_dataframe_aggregates_score():
     assert result.symbol == "BTC/USDT"
     assert result.price == df["close"].iloc[-1]
     assert result.composite_score == sum(s.score for s in result.signals)
-    assert result.verdict == composite_verdict(result.composite_score)
+    assert result.verdict == composite_verdict(result.composite_score, result.signals)
