@@ -1,0 +1,555 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Crypto Signal Scanner</title>
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>📈</text></svg>" />
+<style>
+  :root {
+    color-scheme: light dark;
+    --surface-1: #fcfcfb;
+    --surface-2: #f9f9f7;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #898781;
+    --gridline: #e1e0d9;
+    --border: rgba(11,11,11,0.10);
+    --good: #0ca30c;
+    --good-bg: rgba(12,163,12,0.10);
+    --warning: #b5790a;
+    --warning-bg: rgba(250,178,25,0.16);
+    --serious: #c1552f;
+    --serious-bg: rgba(236,131,90,0.14);
+    --critical: #d03b3b;
+    --critical-bg: rgba(208,59,59,0.12);
+    --muted-bg: rgba(137,135,129,0.14);
+    --accent: #2a78d6;
+    --accent-ink: #ffffff;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --surface-1: #1a1a19;
+      --surface-2: #0d0d0d;
+      --text-primary: #ffffff;
+      --text-secondary: #c3c2b7;
+      --text-muted: #898781;
+      --gridline: #2c2c2a;
+      --border: rgba(255,255,255,0.10);
+      --good: #0ca30c;
+      --good-bg: rgba(12,163,12,0.18);
+      --warning: #fab219;
+      --warning-bg: rgba(250,178,25,0.16);
+      --serious: #ec835a;
+      --serious-bg: rgba(236,131,90,0.16);
+      --critical: #e66767;
+      --critical-bg: rgba(230,103,103,0.18);
+      --muted-bg: rgba(137,135,129,0.16);
+      --accent: #3987e5;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    background: var(--surface-2);
+    color: var(--text-primary);
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--accent); }
+
+  header {
+    padding: 20px 28px 16px;
+    display: flex;
+    align-items: flex-start;
+    justify-content: space-between;
+    flex-wrap: wrap;
+    gap: 16px;
+    border-bottom: 1px solid var(--gridline);
+    background: var(--surface-1);
+  }
+  .title-block h1 {
+    font-size: 19px;
+    margin: 0 0 4px;
+    letter-spacing: -0.01em;
+  }
+  .title-block .tagline {
+    font-size: 13px;
+    color: var(--text-secondary);
+    margin: 0;
+  }
+  .tagline .tf {
+    font-variant-numeric: tabular-nums;
+    color: var(--text-primary);
+    font-weight: 600;
+  }
+
+  .controls {
+    display: flex;
+    gap: 8px;
+    flex-wrap: wrap;
+    align-items: center;
+  }
+  .controls label {
+    font-size: 11px;
+    color: var(--text-muted);
+    display: block;
+    margin-bottom: 3px;
+  }
+  .field { display: flex; flex-direction: column; }
+  .controls input, .controls select {
+    background: var(--surface-2);
+    border: 1px solid var(--border);
+    color: var(--text-primary);
+    border-radius: 6px;
+    padding: 6px 9px;
+    font-size: 13px;
+    font-family: inherit;
+  }
+  .controls input:focus, .controls select:focus {
+    outline: 2px solid var(--accent);
+    outline-offset: 1px;
+  }
+  #topN { width: 60px; }
+  #quote { width: 68px; }
+  .controls button {
+    background: var(--accent);
+    border: none;
+    color: var(--accent-ink);
+    border-radius: 6px;
+    padding: 7px 16px;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    align-self: flex-end;
+  }
+  .controls button:hover { filter: brightness(1.08); }
+  .controls button:active { filter: brightness(0.95); }
+  .controls button:disabled { opacity: 0.6; cursor: default; }
+
+  .statusbar {
+    padding: 10px 28px;
+    font-size: 12.5px;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    font-variant-numeric: tabular-nums;
+  }
+  .statusbar .dot {
+    width: 7px; height: 7px; border-radius: 50%;
+    background: var(--good);
+    flex: none;
+  }
+  .statusbar.scanning .dot { background: var(--warning); animation: pulse 1s ease-in-out infinite; }
+  .statusbar.error .dot { background: var(--critical); }
+  @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+  .error-box {
+    margin: 0 28px 16px;
+    padding: 12px 14px;
+    border-radius: 8px;
+    background: var(--critical-bg);
+    color: var(--critical);
+    font-size: 13px;
+    border: 1px solid var(--border);
+    display: none;
+  }
+
+  main { padding: 4px 28px 32px; max-width: 1400px; margin: 0 auto; }
+
+  .stat-tiles {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin: 12px 0 24px;
+  }
+  .tile {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 14px 16px;
+  }
+  .tile .count {
+    font-size: 26px;
+    font-weight: 700;
+    line-height: 1.1;
+  }
+  .tile .label {
+    font-size: 12px;
+    color: var(--text-secondary);
+    margin-top: 4px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .tile .swatch {
+    width: 8px; height: 8px; border-radius: 2px; flex: none;
+  }
+  .tile.strong-buy .count { color: var(--good); }
+  .tile.buy .count { color: var(--good); }
+  .tile.sell .count { color: var(--serious); }
+  .tile.strong-sell .count { color: var(--critical); }
+  .tile.strong-buy .swatch { background: var(--good); }
+  .tile.buy .swatch { background: var(--good); opacity: 0.55; }
+  .tile.sell .swatch { background: var(--serious); }
+  .tile.strong-sell .swatch { background: var(--critical); }
+
+  .table-wrap {
+    background: var(--surface-1);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow-x: auto;
+  }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; min-width: 760px; }
+  th, td { text-align: left; padding: 10px 14px; vertical-align: top; }
+  thead th {
+    color: var(--text-muted);
+    font-weight: 600;
+    font-size: 11.5px;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    border-bottom: 1px solid var(--gridline);
+    cursor: pointer;
+    user-select: none;
+    white-space: nowrap;
+  }
+  thead th:hover { color: var(--text-primary); }
+  thead th .arrow { opacity: 0.5; margin-left: 3px; }
+  tbody tr { border-bottom: 1px solid var(--gridline); }
+  tbody tr:last-child { border-bottom: none; }
+  tbody tr:hover { background: var(--surface-2); }
+  td.symbol { font-weight: 600; white-space: nowrap; }
+  td.price, td.score, td.exit-price, td.target-price { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.exit-price { color: var(--critical); }
+  td.target-price { color: var(--good); }
+
+  .verdict {
+    font-weight: 600;
+    padding: 3px 9px;
+    border-radius: 999px;
+    font-size: 11.5px;
+    display: inline-block;
+    white-space: nowrap;
+  }
+  .strong-buy   { background: var(--good-bg);     color: var(--good); }
+  .buy          { background: var(--good-bg);     color: var(--good); opacity: 0.85; }
+  .neutral      { background: var(--muted-bg);    color: var(--text-secondary); }
+  .sell         { background: var(--serious-bg);  color: var(--serious); }
+  .strong-sell  { background: var(--critical-bg); color: var(--critical); }
+
+  .score-bar {
+    position: relative;
+    width: 84px;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--gridline);
+    margin-top: 6px;
+    overflow: hidden;
+  }
+  .score-bar .fill {
+    position: absolute;
+    top: 0; bottom: 0;
+    border-radius: 3px;
+  }
+  .score-bar .mid {
+    position: absolute;
+    left: 50%; top: -2px; bottom: -2px;
+    width: 1px;
+    background: var(--text-muted);
+    opacity: 0.5;
+  }
+
+  .signals-list { display: flex; flex-direction: column; gap: 3px; min-width: 320px; }
+  .signal-row {
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+    font-size: 12px;
+    color: var(--text-secondary);
+  }
+  .signal-row .marker { flex: none; font-size: 10px; width: 12px; }
+  .signal-row .marker.bullish { color: var(--good); }
+  .signal-row .marker.bearish { color: var(--critical); }
+  .signal-row .marker.neutral { color: var(--text-muted); }
+  .signal-row .sname { color: var(--text-primary); font-weight: 600; white-space: nowrap; }
+
+  .empty-state {
+    padding: 48px 20px;
+    text-align: center;
+    color: var(--text-muted);
+    font-size: 13px;
+  }
+
+  footer {
+    max-width: 1400px;
+    margin: 0 auto;
+    padding: 0 28px 32px;
+    color: var(--text-muted);
+    font-size: 11.5px;
+    line-height: 1.6;
+  }
+
+  @media (max-width: 900px) {
+    .stat-tiles { grid-template-columns: repeat(2, 1fr); }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="title-block">
+    <h1>Crypto Signal Scanner</h1>
+    <p class="tagline">Tracking <span class="tf" id="tfLabel">4h</span> candles · <span id="lookbackLabel">300-bar lookback</span> · RSI · MACD · EMA 50/200 · Bollinger · Volume · Double Top/Bottom</p>
+  </div>
+  <div class="controls">
+    <div class="field">
+      <label for="exchange">Exchange</label>
+      <select id="exchange">
+        <option value="binance">Binance</option>
+        <option value="kraken">Kraken</option>
+        <option value="coinbase">Coinbase</option>
+        <option value="bybit">Bybit</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="quote">Quote</label>
+      <input id="quote" value="USDT" />
+    </div>
+    <div class="field">
+      <label for="timeframe">Timeframe</label>
+      <select id="timeframe">
+        <option value="15m">15m</option>
+        <option value="1h">1h</option>
+        <option value="4h" selected>4h</option>
+        <option value="1d">1d</option>
+      </select>
+    </div>
+    <div class="field">
+      <label for="topN">Top N</label>
+      <input id="topN" type="number" value="20" min="1" max="100" />
+    </div>
+    <div class="field">
+      <label for="autoRefresh">Auto-refresh</label>
+      <select id="autoRefresh">
+        <option value="0">Off</option>
+        <option value="30">30s</option>
+        <option value="60" selected>60s</option>
+        <option value="300">5m</option>
+      </select>
+    </div>
+    <button id="refresh">Scan now</button>
+  </div>
+</header>
+
+<div class="statusbar" id="statusbar">
+  <span class="dot"></span>
+  <span id="status">Ready.</span>
+</div>
+<div class="error-box" id="errorBox"></div>
+
+<main>
+  <div class="stat-tiles" id="statTiles"></div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th data-key="symbol">Symbol<span class="arrow"></span></th>
+          <th data-key="price">Price<span class="arrow"></span></th>
+          <th data-key="composite_score">Score<span class="arrow"></span></th>
+          <th data-key="verdict">Verdict<span class="arrow"></span></th>
+          <th data-key="exit_price">Exit (stop)<span class="arrow"></span></th>
+          <th data-key="target_price">Target<span class="arrow"></span></th>
+          <th>Signals</th>
+        </tr>
+      </thead>
+      <tbody id="rows"></tbody>
+    </table>
+    <div class="empty-state" id="emptyState" style="display:none">No Buy/Sell signals right now — hit Scan now, or try a different timeframe/exchange.</div>
+  </div>
+
+  <footer>
+    Signals are computational technical indicators (RSI, MACD, EMA 50/200 cross, Bollinger Band breakout,
+    volume spike, double top/bottom patterns) — not financial advice. Composite score ranges −6..+6 across
+    the six signals. Neutral calls are filtered out — only actionable Buy/Strong Buy/Sell/Strong Sell results
+    are shown. Exit (stop-loss) and Target (take-profit) are reference levels sized off ATR(14) — 1.5x for
+    exit, 3x for target (~2:1 reward:risk) — not guarantees. Data is fetched live from the selected exchange's
+    public market data via ccxt.
+  </footer>
+</main>
+
+<script>
+const VERDICT_META = {
+  "Strong Buy":  { cls: "strong-buy",  tile: "strong-buy",  order: 5 },
+  "Buy":         { cls: "buy",         tile: "buy",         order: 4 },
+  "Neutral":     { cls: "neutral",     tile: "neutral",     order: 3 },
+  "Sell":        { cls: "sell",        tile: "sell",        order: 2 },
+  "Strong Sell": { cls: "strong-sell", tile: "strong-sell", order: 1 },
+};
+const TILE_ORDER = ["Strong Buy", "Buy", "Sell", "Strong Sell"];
+const LOOKBACK_DAYS = { "15m": 300 * 15 / 60 / 24, "1h": 300 / 24, "4h": 300 * 4 / 24, "1d": 300 };
+
+let currentData = [];
+let sortState = { key: "composite_score", dir: -1 };
+let autoRefreshTimer = null;
+
+function markerSymbol(verdict) {
+  if (verdict === "bullish") return "▲";
+  if (verdict === "bearish") return "▼";
+  return "●";
+}
+
+function setStatus(mode, text) {
+  const bar = document.getElementById('statusbar');
+  bar.className = 'statusbar' + (mode ? ' ' + mode : '');
+  document.getElementById('status').textContent = text;
+}
+
+function updateTagline() {
+  const tf = document.getElementById('timeframe').value;
+  document.getElementById('tfLabel').textContent = tf;
+  const days = LOOKBACK_DAYS[tf];
+  const lookback = days >= 1 ? `${Math.round(days)}-day lookback` : `${Math.round(days * 24)}-hour lookback`;
+  document.getElementById('lookbackLabel').textContent = `300-bar / ${lookback}`;
+}
+
+async function scan() {
+  const exchange = document.getElementById('exchange').value;
+  const quote = document.getElementById('quote').value.trim() || 'USDT';
+  const timeframe = document.getElementById('timeframe').value;
+  const topN = document.getElementById('topN').value || 20;
+  const errorBox = document.getElementById('errorBox');
+  const button = document.getElementById('refresh');
+
+  updateTagline();
+  errorBox.style.display = 'none';
+  setStatus('scanning', `Scanning top ${topN} ${quote} markets on ${exchange} (${timeframe})...`);
+  button.disabled = true;
+
+  const url = `/api/scan?exchange=${encodeURIComponent(exchange)}&quote=${encodeURIComponent(quote)}&timeframe=${encodeURIComponent(timeframe)}&top_n=${encodeURIComponent(topN)}`;
+
+  try {
+    const res = await fetch(url);
+    if (!res.ok) {
+      const body = await res.json().catch(() => ({}));
+      throw new Error(body.detail || `HTTP ${res.status}`);
+    }
+    const data = await res.json();
+    currentData = data;
+    renderTiles(data);
+    renderTable();
+    setStatus('', `Scanned ${data.length} symbols on ${exchange} (${timeframe}) — updated ${new Date().toLocaleTimeString()}`);
+  } catch (err) {
+    currentData = [];
+    renderTiles([]);
+    renderTable();
+    setStatus('error', 'Scan failed.');
+    errorBox.style.display = 'block';
+    errorBox.textContent = err.message;
+  } finally {
+    button.disabled = false;
+  }
+}
+
+function renderTiles(data) {
+  const counts = Object.fromEntries(TILE_ORDER.map(v => [v, 0]));
+  data.forEach(r => { if (counts[r.verdict] !== undefined) counts[r.verdict]++; });
+
+  const container = document.getElementById('statTiles');
+  container.innerHTML = TILE_ORDER.map(verdict => {
+    const meta = VERDICT_META[verdict];
+    return `<div class="tile ${meta.tile}">
+      <div class="count">${counts[verdict]}</div>
+      <div class="label"><span class="swatch"></span>${verdict}</div>
+    </div>`;
+  }).join('');
+}
+
+function sortedData() {
+  const { key, dir } = sortState;
+  return [...currentData].sort((a, b) => {
+    let av = a[key], bv = b[key];
+    if (typeof av === 'string') { av = av.toLowerCase(); bv = bv.toLowerCase(); }
+    if (av < bv) return -1 * dir;
+    if (av > bv) return 1 * dir;
+    return 0;
+  });
+}
+
+function renderTable() {
+  const rows = document.getElementById('rows');
+  const emptyState = document.getElementById('emptyState');
+  const data = sortedData();
+
+  document.querySelectorAll('th[data-key] .arrow').forEach(el => el.textContent = '');
+  const activeTh = document.querySelector(`th[data-key="${sortState.key}"] .arrow`);
+  if (activeTh) activeTh.textContent = sortState.dir === 1 ? '↑' : '↓';
+
+  if (data.length === 0) {
+    rows.innerHTML = '';
+    emptyState.style.display = 'block';
+    return;
+  }
+  emptyState.style.display = 'none';
+
+  rows.innerHTML = data.map(r => {
+    const meta = VERDICT_META[r.verdict] || VERDICT_META["Neutral"];
+    const pct = Math.min(Math.abs(r.composite_score) / 5, 1) * 50;
+    const barColor = r.composite_score > 0 ? 'var(--good)' : r.composite_score < 0 ? 'var(--critical)' : 'var(--text-muted)';
+    const barLeft = r.composite_score >= 0 ? 50 : 50 - pct;
+    const scoreBar = `<div class="score-bar"><div class="mid"></div><div class="fill" style="left:${barLeft}%; width:${pct}%; background:${barColor}"></div></div>`;
+
+    const signalsHtml = r.signals.map(s => {
+      return `<div class="signal-row">
+        <span class="marker ${s.verdict}">${markerSymbol(s.verdict)}</span>
+        <span class="sname">${s.name}</span>
+        <span>${s.detail}</span>
+      </div>`;
+    }).join('');
+
+    const fmt = (v) => v == null ? '—' : Number(v).toLocaleString(undefined, {maximumFractionDigits: 6});
+
+    return `<tr>
+      <td class="symbol">${r.symbol}</td>
+      <td class="price">${fmt(r.price)}</td>
+      <td class="score">${r.composite_score > 0 ? '+' : ''}${r.composite_score}${scoreBar}</td>
+      <td><span class="verdict ${meta.cls}">${r.verdict}</span></td>
+      <td class="exit-price">${fmt(r.exit_price)}</td>
+      <td class="target-price">${fmt(r.target_price)}</td>
+      <td><div class="signals-list">${signalsHtml}</div></td>
+    </tr>`;
+  }).join('');
+}
+
+document.querySelectorAll('th[data-key]').forEach(th => {
+  th.addEventListener('click', () => {
+    const key = th.dataset.key;
+    if (sortState.key === key) {
+      sortState.dir *= -1;
+    } else {
+      sortState = { key, dir: key === 'symbol' || key === 'verdict' ? 1 : -1 };
+    }
+    renderTable();
+  });
+});
+
+function setupAutoRefresh() {
+  if (autoRefreshTimer) clearInterval(autoRefreshTimer);
+  const seconds = Number(document.getElementById('autoRefresh').value);
+  if (seconds > 0) {
+    autoRefreshTimer = setInterval(scan, seconds * 1000);
+  }
+}
+
+document.getElementById('refresh').addEventListener('click', scan);
+document.getElementById('autoRefresh').addEventListener('change', setupAutoRefresh);
+document.getElementById('timeframe').addEventListener('change', updateTagline);
+
+updateTagline();
+renderTiles([]);
+renderTable();
+scan();
+setupAutoRefresh();
+</script>
+</body>
+</html>
