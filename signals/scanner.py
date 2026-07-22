@@ -36,6 +36,8 @@ class ScanResult:
     price: float
     composite_score: int
     verdict: str
+    exit_price: float | None = None  # protective stop-loss level
+    target_price: float | None = None  # take-profit level
     signals: list[SignalResult] = field(default_factory=list)
 
 
@@ -281,14 +283,37 @@ def composite_verdict(score: int, signals: list[SignalResult] | None = None) -> 
     return "Neutral"
 
 
+RISK_ATR_MULT = 1.5
+REWARD_ATR_MULT = 3.0
+
+
+def _exit_and_target(price: float, verdict: str, atr_value: float | None) -> tuple[float | None, float | None]:
+    """Exit (stop-loss) and target (take-profit) levels, sized off ATR(14)
+    so the distance scales with how much the symbol actually moves. A 2:1
+    reward:risk ratio (3x ATR target vs. 1.5x ATR stop) is a standard
+    convention, not a guarantee -- always pair with your own risk sizing."""
+    if atr_value is None or pd.isna(atr_value) or verdict not in ("Buy", "Strong Buy", "Sell", "Strong Sell"):
+        return None, None
+    direction = 1 if verdict in ("Buy", "Strong Buy") else -1
+    exit_price = price - direction * RISK_ATR_MULT * atr_value
+    target_price = price + direction * REWARD_ATR_MULT * atr_value
+    return exit_price, target_price
+
+
 def scan_dataframe(symbol: str, df: pd.DataFrame) -> ScanResult:
     signals = evaluate_signals(df)
     score = sum(s.score for s in signals)
+    verdict = composite_verdict(score, signals)
+    price = float(df["close"].iloc[-1])
+    atr_value = ind.atr(df["high"], df["low"], df["close"], 14).iloc[-1]
+    exit_price, target_price = _exit_and_target(price, verdict, atr_value)
     return ScanResult(
         symbol=symbol,
-        price=float(df["close"].iloc[-1]),
+        price=price,
         composite_score=score,
-        verdict=composite_verdict(score, signals),
+        verdict=verdict,
+        exit_price=exit_price,
+        target_price=target_price,
         signals=signals,
     )
 

@@ -56,6 +56,16 @@ def volume_spike_ratio(volume: pd.Series, period: int = 20) -> pd.Series:
     return volume / avg_volume
 
 
+def atr(high: pd.Series, low: pd.Series, close: pd.Series, period: int = 14) -> pd.Series:
+    """Wilder's Average True Range -- a volatility measure used to size
+    stop-loss/target distances relative to how much a symbol actually moves."""
+    prev_close = close.shift(1)
+    true_range = pd.concat(
+        [high - low, (high - prev_close).abs(), (low - prev_close).abs()], axis=1
+    ).max(axis=1)
+    return true_range.ewm(alpha=1 / period, min_periods=period, adjust=False).mean()
+
+
 def pivot_highs(series: pd.Series, window: int = 3) -> pd.Series:
     """Boolean mask: True where a bar is strictly higher than every bar in the
     `window` bars before it and the `window` bars after it. Requires strict

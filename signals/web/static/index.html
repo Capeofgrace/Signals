@@ -220,7 +220,9 @@
   tbody tr:last-child { border-bottom: none; }
   tbody tr:hover { background: var(--surface-2); }
   td.symbol { font-weight: 600; white-space: nowrap; }
-  td.price, td.score { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.price, td.score, td.exit-price, td.target-price { font-variant-numeric: tabular-nums; white-space: nowrap; }
+  td.exit-price { color: var(--critical); }
+  td.target-price { color: var(--good); }
 
   .verdict {
     font-weight: 600;
@@ -356,6 +358,8 @@
           <th data-key="price">Price<span class="arrow"></span></th>
           <th data-key="composite_score">Score<span class="arrow"></span></th>
           <th data-key="verdict">Verdict<span class="arrow"></span></th>
+          <th data-key="exit_price">Exit (stop)<span class="arrow"></span></th>
+          <th data-key="target_price">Target<span class="arrow"></span></th>
           <th>Signals</th>
         </tr>
       </thead>
@@ -368,7 +372,9 @@
     Signals are computational technical indicators (RSI, MACD, EMA 50/200 cross, Bollinger Band breakout,
     volume spike, double top/bottom patterns) — not financial advice. Composite score ranges −6..+6 across
     the six signals. Neutral calls are filtered out — only actionable Buy/Strong Buy/Sell/Strong Sell results
-    are shown. Data is fetched live from the selected exchange's public market data via ccxt.
+    are shown. Exit (stop-loss) and Target (take-profit) are reference levels sized off ATR(14) — 1.5x for
+    exit, 3x for target (~2:1 reward:risk) — not guarantees. Data is fetched live from the selected exchange's
+    public market data via ccxt.
   </footer>
 </main>
 
@@ -501,11 +507,15 @@ function renderTable() {
       </div>`;
     }).join('');
 
+    const fmt = (v) => v == null ? '—' : Number(v).toLocaleString(undefined, {maximumFractionDigits: 6});
+
     return `<tr>
       <td class="symbol">${r.symbol}</td>
-      <td class="price">${Number(r.price).toLocaleString(undefined, {maximumFractionDigits: 6})}</td>
+      <td class="price">${fmt(r.price)}</td>
       <td class="score">${r.composite_score > 0 ? '+' : ''}${r.composite_score}${scoreBar}</td>
       <td><span class="verdict ${meta.cls}">${r.verdict}</span></td>
+      <td class="exit-price">${fmt(r.exit_price)}</td>
+      <td class="target-price">${fmt(r.target_price)}</td>
       <td><div class="signals-list">${signalsHtml}</div></td>
     </tr>`;
   }).join('');

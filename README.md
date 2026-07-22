@@ -47,6 +47,23 @@ These are widely-used, well-documented signals — not a guarantee of
 profitability. Always combine with your own risk management; this tool
 surfaces signals, it does not give financial advice.
 
+## Exit and target prices
+
+Every Buy/Sell result includes two reference price levels, sized off
+**ATR(14)** (Average True Range — a standard volatility measure) so the
+distance scales with how much that specific symbol actually moves, rather
+than a fixed percentage:
+
+- **Exit (stop-loss)**: `entry ∓ 1.5 × ATR(14)` — the protective level to cut
+  losses if the trade goes against you.
+- **Target (take-profit)**: `entry ± 3 × ATR(14)` — the level to lock in
+  gains.
+
+That's a 2:1 reward-to-risk ratio, a standard convention — not a guarantee,
+not backtested, and not personalized to your risk tolerance. Direction
+flips for Sell (target below entry, exit above). Both are `null`/`—` if
+there isn't enough history to compute ATR.
+
 ## Install
 
 ```bash

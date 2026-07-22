@@ -79,3 +79,31 @@ def test_pivot_highs_ignores_flat_runs():
     series = pd.Series([1.0, 2.0, 3.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0, 5.0])
     mask = ind.pivot_highs(series, window=3)
     assert not mask.any()
+
+
+def test_atr_is_zero_for_a_perfectly_flat_series():
+    n = 30
+    close = pd.Series([100.0] * n)
+    high = close.copy()
+    low = close.copy()
+    result = ind.atr(high, low, close, period=14)
+    assert result.iloc[-1] == pytest.approx(0.0)
+
+
+def test_atr_reflects_true_range_including_gaps():
+    # A gap-up (low stays above the prior close) must still count via the
+    # high-minus-prev-close leg of true range, not just high-minus-low.
+    close = pd.Series([100.0] * 15 + [120.0])
+    high = close.copy()
+    low = close.copy()
+    result = ind.atr(high, low, close, period=14)
+    assert result.iloc[-1] > 0
+
+
+def test_atr_scales_with_volatility():
+    rng = np.random.default_rng(5)
+    calm = pd.Series(100 + rng.normal(0, 0.2, 60))
+    wild = pd.Series(100 + rng.normal(0, 5.0, 60))
+    atr_calm = ind.atr(calm + 0.3, calm - 0.3, calm, period=14).iloc[-1]
+    atr_wild = ind.atr(wild + 0.3, wild - 0.3, wild, period=14).iloc[-1]
+    assert atr_wild > atr_calm

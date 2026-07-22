@@ -1,8 +1,18 @@
 import numpy as np
 import pandas as pd
+import pytest
 
 from signals import data as data_mod
-from signals.scanner import SignalResult, composite_verdict, evaluate_signals, scan_dataframe, scan_symbols
+from signals.scanner import (
+    REWARD_ATR_MULT,
+    RISK_ATR_MULT,
+    SignalResult,
+    _exit_and_target,
+    composite_verdict,
+    evaluate_signals,
+    scan_dataframe,
+    scan_symbols,
+)
 
 
 def _signals(**overrides):
@@ -300,3 +310,53 @@ def test_scan_symbols_drops_neutral_results(monkeypatch):
     assert "BUY/USDT" in symbols_returned
     assert "NEUTRAL/USDT" not in symbols_returned
     assert all(r.verdict != "Neutral" for r in results)
+
+
+def test_exit_and_target_none_for_neutral():
+    assert _exit_and_target(100.0, "Neutral", 2.0) == (None, None)
+
+
+def test_exit_and_target_none_without_atr():
+    assert _exit_and_target(100.0, "Buy", None) == (None, None)
+    assert _exit_and_target(100.0, "Buy", float("nan")) == (None, None)
+
+
+def test_exit_and_target_buy_direction():
+    exit_price, target_price = _exit_and_target(100.0, "Buy", atr_value=2.0)
+    assert exit_price == pytest.approx(100.0 - RISK_ATR_MULT * 2.0)
+    assert target_price == pytest.approx(100.0 + REWARD_ATR_MULT * 2.0)
+    assert exit_price < 100.0 < target_price
+
+
+def test_exit_and_target_sell_direction_is_mirrored():
+    exit_price, target_price = _exit_and_target(100.0, "Sell", atr_value=2.0)
+    assert exit_price == pytest.approx(100.0 + RISK_ATR_MULT * 2.0)
+    assert target_price == pytest.approx(100.0 - REWARD_ATR_MULT * 2.0)
+    assert target_price < 100.0 < exit_price
+
+
+def test_exit_and_target_reward_risk_ratio_is_2_to_1():
+    exit_price, target_price = _exit_and_target(100.0, "Strong Buy", atr_value=1.0)
+    risk = 100.0 - exit_price
+    reward = target_price - 100.0
+    assert reward / risk == pytest.approx(2.0)
+
+
+def test_scan_dataframe_populates_exit_and_target_for_a_buy():
+    df = _noisy_df(drift=0.15, vol=0.7, seed=21)
+    result = scan_dataframe("BUY/USDT", df)
+    assert result.verdict == "Buy"
+    assert result.exit_price is not None
+    assert result.target_price is not None
+    assert result.exit_price < result.price < result.target_price
+
+
+def test_scan_dataframe_exit_and_target_none_when_filtered_neutral(monkeypatch):
+    # scan_symbols drops Neutral results, but scan_dataframe on its own
+    # should still report None/None for a Neutral verdict rather than a
+    # meaningless price.
+    df = _noisy_df(drift=0.0, vol=0.5, seed=3)
+    result = scan_dataframe("NEUTRAL/USDT", df)
+    assert result.verdict == "Neutral"
+    assert result.exit_price is None
+    assert result.target_price is None

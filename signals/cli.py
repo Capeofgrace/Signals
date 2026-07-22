@@ -64,6 +64,8 @@ def print_table(results: list[ScanResult]) -> None:
     table.add_column("Price", justify="right")
     table.add_column("Score", justify="right")
     table.add_column("Verdict")
+    table.add_column("Exit (stop)", justify="right")
+    table.add_column("Target", justify="right")
     table.add_column("Signals")
 
     for r in results:
@@ -74,19 +76,31 @@ def print_table(results: list[ScanResult]) -> None:
             f"{r.price:,.4f}",
             f"{r.composite_score:+d}",
             f"[{style}]{r.verdict}[/{style}]",
+            f"{r.exit_price:,.4f}" if r.exit_price is not None else "—",
+            f"{r.target_price:,.4f}" if r.target_price is not None else "—",
             signal_text,
         )
     console.print(table)
+    console.print(
+        "[dim]Exit/Target are ATR(14)-based (1.5x/3x, ~2:1 reward:risk) reference levels, "
+        "not guarantees. Not financial advice.[/dim]"
+    )
 
 
 def print_plain(results: list[ScanResult]) -> None:
-    header = f"{'Symbol':<14}{'Price':>14}{'Score':>8}  Verdict"
+    header = f"{'Symbol':<14}{'Price':>14}{'Score':>8}  {'Verdict':<12}{'Exit':>14}{'Target':>14}"
     print(header)
     print("-" * len(header))
     for r in results:
-        print(f"{r.symbol:<14}{r.price:>14,.4f}{r.composite_score:>+8d}  {r.verdict}")
+        exit_str = f"{r.exit_price:,.4f}" if r.exit_price is not None else "—"
+        target_str = f"{r.target_price:,.4f}" if r.target_price is not None else "—"
+        print(
+            f"{r.symbol:<14}{r.price:>14,.4f}{r.composite_score:>+8d}  "
+            f"{r.verdict:<12}{exit_str:>14}{target_str:>14}"
+        )
         for s in r.signals:
             print(f"    - {s.name}: {s.detail}")
+    print("\nExit/Target are ATR(14)-based reference levels (~2:1 reward:risk), not guarantees.")
 
 
 def print_json(results: list[ScanResult]) -> None:
@@ -95,10 +109,24 @@ def print_json(results: list[ScanResult]) -> None:
 
 def print_csv(results: list[ScanResult]) -> None:
     writer = csv.writer(sys.stdout)
-    writer.writerow(["symbol", "price", "composite_score", "verdict", "signal", "signal_verdict", "signal_detail"])
+    writer.writerow(
+        [
+            "symbol",
+            "price",
+            "composite_score",
+            "verdict",
+            "exit_price",
+            "target_price",
+            "signal",
+            "signal_verdict",
+            "signal_detail",
+        ]
+    )
     for r in results:
         for s in r.signals:
-            writer.writerow([r.symbol, r.price, r.composite_score, r.verdict, s.name, s.verdict, s.detail])
+            writer.writerow(
+                [r.symbol, r.price, r.composite_score, r.verdict, r.exit_price, r.target_price, s.name, s.verdict, s.detail]
+            )
 
 
 def main(argv: list[str] | None = None) -> int:
